@@ -1,25 +1,25 @@
 
-#include <util/atomic.h>
-#include "TimerOne.h"
+#include "DueTimer.h"
 #include <PID_v1.h>
 
 // Pins
-#define ENCA1 2
-#define ENCB1 3
+#define ENCA1 52
+#define ENCB1 53
 #define pinPWM1 5
 #define pinDIR1 6
 
-#define ENCA2 18
-#define ENCB2 19
+#define ENCA2 50
+#define ENCB2 51
 #define pinPWM2 7
 #define pinDIR2 8
 
 
+#define num_motors 1
 
 int num_targets, current_target_index ;
-float targets[200];
+float targets[num_motors][200];
 float resolution = 0.01;
-// Use the "volatile" directive for variables
+// Use the "volatile" directive for variabless
 // used in an interrupt
 volatile int pos_i1 = 0, pos_i2 = 0;
 String targetString = "";
@@ -30,22 +30,23 @@ volatile float tours1 = 0, tours2 = 0;
 volatile long prevT_i1 = 0, prevT_i2 = 0;;
 int reduction = 172;
 boolean isPID = false;
-volatile double setpoint1, input1, output1;
-volatile double setpoint2, input2, output2;
+volatile double input1_copy, input2_copy;
+double setpoint1,input1, output1;
+double setpoint2,input2, output2;
 double Kp=2500, Ki=0.2, Kd=0.001;
 PID myPID1(&input1, &output1, &setpoint1, Kp, Ki, Kd, DIRECT);
 PID myPID2(&input2, &output2, &setpoint2, Kp, Ki, Kd, DIRECT);
 
 
 void ISR_timerone() {  
-  Timer1.detachInterrupt();
   Serial.print("tours ");
   Serial.println(tours1);
   Serial.print("input");
   Serial.println(input1);
   Serial.print("set point ");
   Serial.println(setpoint1);
-  Timer1.attachInterrupt(ISR_timerone);
+  Serial.print("is Done ? ");
+  Serial.println(checkIfDone());
 }
 
 void setup() {
@@ -61,8 +62,7 @@ void setup() {
   pinMode(pinPWM2,OUTPUT);
   pinMode(pinDIR2,OUTPUT);
   
-  Timer1.initialize(1000000);
-  Timer1.attachInterrupt(ISR_timerone);
+  Timer3.attachInterrupt(ISR_timerone).start(1000000);
   
   attachInterrupt(digitalPinToInterrupt(ENCA1), readEncoder1,RISING);
   attachInterrupt(digitalPinToInterrupt(ENCA2), readEncoder2,RISING);
@@ -97,12 +97,18 @@ void loop() {
     else if (command == 's'){
       current_target_index = 0;
       String string = Serial.readString();
-      num_targets = getValue(string, ',', 0).toInt();
-      targetString = getValue(string, ',', 1);
-      decompose_target1(targetString);
+      num_targets = getValue(string, '-', 0).toInt();
+      targetString = getValue(string, '-', 1);
+      decompose_target(targetString);
       Serial.println(targetString);
     }
   }
+  
+  noInterrupts();
+  input1 = input1_copy;
+  input2 = input2_copy;
+  interrupts();
+  
   update_setpoint1();
   myPID1.Compute();
   if(isPID){
@@ -111,17 +117,26 @@ void loop() {
 }
 
 
+
+boolean checkIfDone(){
+  return abs(setpoint1 - input1) <= resolution;
+}
+
 void update_setpoint1(){
   
-  if(abs(setpoint1 - input1) <= resolution && current_target_index < num_targets){
-    setpoint1 = targets[current_target_index];
+  if(checkIfDone() && current_target_index < num_targets){
+    setpoint1 = targets[0][current_target_index];
     current_target_index++;
   }
 }
-void decompose_target1(String targetString){
-  for(int i = 0 ; i < num_targets ; i++){
-     targets[i]= getValue(targetString, ' ', i).toFloat();
-  } 
+void decompose_target(String targetString){
+  for(int j = 0 ; j < num_motors ; j++){
+    String  string_j = getValue(targetString, ',', j);
+    for(int i = 0 ; i < num_targets ; i++){
+     targets[j][i]= getValue(string_j, ' ', i).toFloat();
+  }    
+  }
+  
   update_setpoint1();
 }
 
@@ -137,7 +152,7 @@ void readEncoder1(){
   }
   pos_i1 = pos_i1 + increment;
   tours1 = pos_i1/12.0/reduction;
-  input1 = tours1;
+  input1_copy = tours1;
   external_angle1 = (pos_i1 /12.0)*2*PI / reduction ; 
   long currT = micros();
   float deltaT = ((float) (currT - prevT_i1))/1.0e6;
@@ -158,7 +173,7 @@ void readEncoder2(){
   }
   pos_i2 = pos_i2 + increment;
   tours2 = pos_i2/12.0/reduction;
-  input2 = tours2;
+  input2_copy = tours2;
   external_angle2 = (pos_i2 /12.0)*2*PI / reduction ; 
   long currT = micros();
   float deltaT = ((float) (currT - prevT_i2))/1.0e6;
