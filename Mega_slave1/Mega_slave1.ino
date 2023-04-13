@@ -8,7 +8,7 @@
 #define id 1
 
 int ENCA[] = {2,18};
-int ENCB[] = {3, 19};
+int ENCB[] = {52, 53};
 int pinPWM[] = {5,7,9};
 int pinDIR[] = {6,8,10};
 
@@ -48,7 +48,7 @@ void ISR_timerone() {
 }
 
 void setup() {
-  Wire.begin(id);                // join i2c bus with address #8
+  Wire.begin(id);               
   Wire.onRequest(requestEvent); // register event
   Wire.onReceive(receiveEvent); // register event
   Serial.begin(9600);    // start serial for output
@@ -76,34 +76,7 @@ void setup() {
 
 void loop() {
   if(Serial.available()>0){
-    char command = Serial.read();
-    if(command == 'b') {
-      int index = Serial.parseInt()-1;
-      setMotor(0, pinDIR[index], pinPWM[index]);
-      isPID = false;
-    }
-    else if (command == 'l'){
-      int index = Serial.parseInt()-1;
-      setMotor(-255, pinDIR[index], pinPWM[index]);
-      Serial.print("command");
-      Serial.println(pinDIR[index]);
-      isPID = false;
-    }
-    else if (command == 'r'){
-      int index = Serial.parseInt()-1;
-      setMotor(255, pinDIR[index], pinPWM[index]);
-      isPID = false;
-    }
-    else if (command == 'a'){
-      isPID = true;
-    }
-    else if (command == 's'){
-      String string = Serial.readString();
-      for (int i = 0; i < num_motors; i++) {
-        setpoint[i] = getValue(string, ',', i).toFloat();  
-      }
-      Serial.println(string);
-    }
+     handle_input(Serial.readString());
   }
   
   noInterrupts();
@@ -203,19 +176,45 @@ void readEncoder3(){
 
 // function that executes whenever data is received from master
 void receiveEvent() {
-//  input_string = "";
-//  while (Wire.available()) { // loop through all but the last
-//    char c = Wire.read();       // receive byte as a character
-//    //Serial.println(c);
-//    input_string += c;
-//  }
-//  Serial.println(input_string);
+  setMotor(50,6,5);
+  String input_string = "";
+  while (Wire.available()) { // loop through all but the last
+    char c = Wire.read();       // receive byte as a character
+    input_string += c;
+  }
+  handle_input(input_string);
+  Serial.println(input_string);
 }
 
 // function that executes whenever data is requested by master
 void requestEvent() {
   //Wire.write(value); // respond with message of 1 byte
 }
-void handle_input(){
-  
+void handle_input(String input){
+    char command = input.charAt(0);;
+    input = input.substring(1); 
+    if(command == 'b') {
+      int index = input.toInt()-1;
+      setMotor(0, pinDIR[index], pinPWM[index]);
+      isPID = false;
+    }
+    else if (command == 'l'){
+      int index = input.toInt()-1;
+      setMotor(-255, pinDIR[index], pinPWM[index]);
+      isPID = false;
+    }
+    else if (command == 'r'){
+      int index = input.toInt()-1;
+      setMotor(255, pinDIR[index], pinPWM[index]);
+      isPID = false;
+    }
+    else if (command == 'a'){
+      isPID = true;
+    }
+    else if (command == 's'){
+      for (int i = 0; i < num_motors; i++) {
+        setpoint[i] = getValue(input, ',', i).toFloat();  
+      }
+      Serial.println(input);
+    }
 }

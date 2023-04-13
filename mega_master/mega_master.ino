@@ -50,6 +50,7 @@ void ISR_timerone() {
 
 void setup() {
   Serial.begin(9600);
+  Wire.begin();
   for (int i = 0; i < num_motors; i++) {
     pinMode(ENCA[i],INPUT);
     pinMode(ENCB[i],INPUT);
@@ -137,15 +138,13 @@ void loop() {
 
 void share_command(int index,char command ){
   index = index - 2;
-  int quotient = index/3;
-  int new_index = index - 3*quotient;
+  int quotient = index/2;
+  int new_index = index - 2*quotient + 1;
   int id = quotient + 1;
   String shared_string = "";
   shared_string +=command;
   shared_string +=String(new_index);
   send_to_slave(id,shared_string);
-  Serial.print("share a command ");
-  Serial.println(shared_string);
 }
 
 boolean checkIfDone(){
@@ -256,12 +255,14 @@ void readEncoder2(){
 
 
 void send_to_slave(int id, String str){
-//  int str_len = str.length() + 1; 
-//  char char_array[str_len];
-//  str.toCharArray(char_array, str_len);
-//  Wire.beginTransmission(id);
-//  Wire.write(char_array);        
-//  Wire.endTransmission();
+  int str_len = str.length() + 1; 
+  char char_array[str_len];
+  str.toCharArray(char_array, str_len);
+  Wire.beginTransmission(id);
+  Wire.write(char_array);        
+  Wire.endTransmission();
+  Serial.print(str);
+  Serial.println(" done");
 }
 
 byte request_from_slave(int id){
